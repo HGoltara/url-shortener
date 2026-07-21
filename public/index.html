@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>URL Shortener</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #0f1115;
+    --card: #171a21;
+    --border: #2a2e37;
+    --text: #e7e9ee;
+    --muted: #9aa1ad;
+    --accent: #6366f1;
+    --accent-hover: #7476f3;
+    --danger: #ef4444;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f5f6f8;
+      --card: #ffffff;
+      --border: #e2e4e9;
+      --text: #14161a;
+      --muted: #6b7280;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 48px 16px;
+  }
+  main { width: 100%; max-width: 640px; }
+  h1 { font-size: 1.6rem; margin-bottom: 4px; }
+  p.subtitle { color: var(--muted); margin-top: 0; margin-bottom: 28px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  form { display: flex; flex-direction: column; gap: 12px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  input {
+    flex: 1;
+    min-width: 160px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-size: 0.95rem;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button {
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent);
+    color: white;
+    font-size: 0.95rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  button:hover { background: var(--accent-hover); }
+  button.secondary {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    font-weight: 400;
+    font-size: 0.85rem;
+  }
+  button.secondary:hover { color: var(--text); border-color: var(--text); }
+  .error { color: var(--danger); font-size: 0.85rem; min-height: 1.2em; }
+  ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+  li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .link-info { min-width: 0; }
+  .short { font-weight: 600; display: block; }
+  .short a { color: var(--accent); text-decoration: none; }
+  .short a:hover { text-decoration: underline; }
+  .original {
+    color: var(--muted);
+    font-size: 0.82rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    max-width: 380px;
+  }
+  .meta { color: var(--muted); font-size: 0.78rem; margin-top: 2px; }
+  .actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .empty { color: var(--muted); text-align: center; padding: 24px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🔗 URL Shortener</h1>
+  <p class="subtitle">Cole uma URL longa e gere um link curto.</p>
+
+  <div class="card">
+    <form id="shorten-form">
+      <div class="row">
+        <input id="url" type="url" placeholder="https://exemplo.com/pagina-muito-longa" required />
+      </div>
+      <div class="row">
+        <input id="customCode" type="text" placeholder="alias personalizado (opcional)" />
+        <button type="submit">Encurtar</button>
+      </div>
+      <div class="error" id="error"></div>
+    </form>
+  </div>
+
+  <ul id="links"></ul>
+</main>
+
+<script>
+  const form = document.getElementById("shorten-form");
+  const urlInput = document.getElementById("url");
+  const customCodeInput = document.getElementById("customCode");
+  const errorEl = document.getElementById("error");
+  const linksEl = document.getElementById("links");
+
+  async function loadLinks() {
+    const res = await fetch("/api/links");
+    const links = await res.json();
+
+    if (links.length === 0) {
+      linksEl.innerHTML = '<li class="empty">Nenhum link criado ainda.</li>';
+      return;
+    }
+
+    linksEl.innerHTML = links
+      .map(
+        (link) => `
+      <li data-code="${link.code}">
+        <div class="link-info">
+          <span class="short"><a href="${link.shortUrl}" target="_blank" rel="noopener">${link.shortUrl}</a></span>
+          <span class="original" title="${link.original_url}">${link.original_url}</span>
+          <span class="meta">${link.clicks} clique(s) · criado em ${new Date(link.created_at + "Z").toLocaleString("pt-BR")}</span>
+        </div>
+        <div class="actions">
+          <button class="secondary" data-action="copy" data-url="${link.shortUrl}">Copiar</button>
+          <button class="secondary" data-action="delete" data-code="${link.code}">Excluir</button>
+        </div>
+      </li>`
+      )
+      .join("");
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    errorEl.textContent = "";
+
+    const body = { url: urlInput.value.trim() };
+    if (customCodeInput.value.trim()) body.customCode = customCodeInput.value.trim();
+
+    const res = await fetch("/api/shorten", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      errorEl.textContent = data.error || "Erro ao encurtar a URL.";
+      return;
+    }
+
+    urlInput.value = "";
+    customCodeInput.value = "";
+    loadLinks();
+  });
+
+  linksEl.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+
+    if (btn.dataset.action === "copy") {
+      await navigator.clipboard.writeText(btn.dataset.url);
+      const original = btn.textContent;
+      btn.textContent = "Copiado!";
+      setTimeout(() => (btn.textContent = original), 1200);
+    }
+
+    if (btn.dataset.action === "delete") {
+      await fetch(`/api/links/${btn.dataset.code}`, { method: "DELETE" });
+      loadLinks();
+    }
+  });
+
+  loadLinks();
+</script>
+</body>
+</html>
