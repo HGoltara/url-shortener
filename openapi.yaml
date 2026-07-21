@@ -1,0 +1,144 @@
+openapi: 3.0.3
+info:
+  title: URL Shortener API
+  description: API para criar, listar, redirecionar e remover links curtos.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+    description: Servidor local
+
+paths:
+  /api/shorten:
+    post:
+      summary: Cria um link curto
+      tags: [Links]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: https://exemplo.com/pagina-muito-longa
+                customCode:
+                  type: string
+                  description: Alias personalizado opcional (3 a 32 caracteres, letras/números/-/_)
+                  example: meu-link
+      responses:
+        "201":
+          description: Link criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShortenResponse"
+        "400":
+          description: URL ou alias inválido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Alias já está em uso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/links:
+    get:
+      summary: Lista todos os links criados
+      tags: [Links]
+      responses:
+        "200":
+          description: Lista de links
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Link"
+
+  /api/links/{code}:
+    delete:
+      summary: Remove um link pelo código
+      tags: [Links]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          example: x7K2pQ
+      responses:
+        "204":
+          description: Link removido com sucesso
+        "404":
+          description: Link não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /{code}:
+    get:
+      summary: Redireciona para a URL original e contabiliza o clique
+      tags: [Redirecionamento]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          example: x7K2pQ
+      responses:
+        "302":
+          description: Redirecionamento para a URL original
+        "404":
+          description: Código não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    ShortenResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: x7K2pQ
+        shortUrl:
+          type: string
+          example: http://localhost:3000/x7K2pQ
+        originalUrl:
+          type: string
+          example: https://exemplo.com/pagina-muito-longa
+    Link:
+      type: object
+      properties:
+        code:
+          type: string
+          example: x7K2pQ
+        original_url:
+          type: string
+          example: https://exemplo.com/pagina-muito-longa
+        clicks:
+          type: integer
+          example: 3
+        created_at:
+          type: string
+          example: "2026-07-21 03:56:25"
+        shortUrl:
+          type: string
+          example: http://localhost:3000/x7K2pQ
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Informe uma URL válida (http:// ou https://).
